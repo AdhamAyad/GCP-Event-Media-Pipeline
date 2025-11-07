@@ -18,7 +18,6 @@ module "backend_sa" {
         "roles/run.invoker",
         "roles/artifactregistry.reader",
         "roles/storage.objectCreator",
-        "roles/storage.viewer"
     ]
 }
 
