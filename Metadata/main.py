@@ -13,16 +13,27 @@ FIRESTORE_COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME")
 
 storage_client = storage.Client()
 fire_db = firestore.Client()
-raw_bucket = storage_client.bucket(RAW_BUCKET_NAME)
+raw_bucket = None
+
+try:
+    if RAW_BUCKET_NAME:
+        raw_bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
+except Exception as e:
+    print(f"خطأ في تهيئة الباكيت: {e}")
 
 @app.route('/', methods=['POST'])
 def handle_pubsub_message():
+    if not raw_bucket:
+        print("خطأ فادح: الباكيت غير مُعرّف.")
+        return "Server configuration error", 500
+
     try:
         envelope = request.get_json(silent=True)
         data_str = base64.b64decode(envelope['message']['data']).decode('utf-8')
         gcs_event = json.loads(data_str)
-        bucket_name = gcs_event.get('bucket')
+        
         file_name = gcs_event.get('name')
+        bucket_name = gcs_event.get('bucket')
         if not file_name or bucket_name != RAW_BUCKET_NAME:
             return "", 204
     except:
@@ -48,10 +59,11 @@ def handle_pubsub_message():
             "size_bytes": size_bytes
         })
 
+        print(f"تم حفظ الميتاداتا للصورة: {file_name}")
         return "", 204
 
     except Exception as e:
-        print(f"Error processing {file_name}: {e}")
+        print(f"فشل معالجة {file_name}: {e}")
         return "Internal Server Error", 500
 
 if __name__ == '__main__':
