@@ -104,6 +104,7 @@ module "metadata" {
   }
   depends_on            = [
     google_storage_bucket.gcp_event_media,
-    
+    google_storage_bucket_iam_member.metadata_raw_bucket_reader,
+    google_storage_bucket_iam_member.metadata_raw_object_viewer,
     ]
 }
