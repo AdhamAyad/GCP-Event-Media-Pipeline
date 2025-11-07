@@ -35,5 +35,5 @@ jobs:
         - name: Update Cloud Run Backend
           run: |
              gcloud run deploy backend \
-             --image=${{secrets.REPO_URL}}beckend:${{github.sha}} \
+             --image=${{secrets.REPO_URL}}backend:${{github.sha}} \
              --region=us-east1
