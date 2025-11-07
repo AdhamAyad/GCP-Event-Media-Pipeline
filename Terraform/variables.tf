@@ -10,7 +10,7 @@ variable "region" {
        default = "us-east1"
     }
 
-variable "admin_bucket_name" {
+variable "gcp_event_media_name" {
        type = string
-       description = "Current Region"
+       description = "Bucket Name"
     }    

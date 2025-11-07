@@ -1,5 +1,5 @@
-resource "google_storage_bucket" "admin_files_bucket" {
-  name          = var.admin_bucket_name
+resource "google_storage_bucket" "gcp_event_media" {
+  name          = var.gcp_event_media_name
   location      = var.region                   
   storage_class = "STANDARD"
   force_destroy = true

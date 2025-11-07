@@ -15,6 +15,7 @@ module "frontend" {
   }
   depends_on            = [
     module.backend,
+    module.frontend_sa,
     ]
 }
 
@@ -30,6 +31,11 @@ module "backend" {
   min_instances         = 0
   max_instances         = 3
   ingress               = "INGRESS_TRAFFIC_ALL"
+  env_vars = {
+    "RAW_BUCKET_NAME" = google_storage_bucket.gcp_event_media.name
+  }
   depends_on            = [
+    google_storage_bucket.gcp_event_media,
+    module.backend_sa,
     ]
 }
