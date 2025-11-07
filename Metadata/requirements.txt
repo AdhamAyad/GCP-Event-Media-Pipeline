@@ -1,5 +1,5 @@
-Flask
-gunicorn
+flask
+Pillow
 google-cloud-storage
 google-cloud-firestore
-Pillow
+google-cloud-core
