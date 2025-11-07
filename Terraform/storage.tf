@@ -44,3 +44,10 @@ resource "google_storage_bucket" "gcp_event_media_processed_bucket" {
   }
   uniform_bucket_level_access = true
 }
+
+resource "google_firestore_database" "matedata_db" {
+  name        = "metadata-db"
+  project     = var.project_id
+  location_id = var.region
+  type        = "NATIVE"
+}
