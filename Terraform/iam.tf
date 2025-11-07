@@ -129,13 +129,13 @@ module "metadata_sa" {
     ]
 }
 
-resource "google_storage_bucket_iam_member" "display_raw_bucket_reader" {
+resource "google_storage_bucket_iam_member" "metadata_raw_bucket_reader" {
   bucket = google_storage_bucket.gcp_event_media.name
   role   = "roles/storage.legacyBucketReader"
   member = "serviceAccount:${module.metadata_sa.service_account_email}"
 }
 
-resource "google_storage_bucket_iam_member" "display_raw_object_viewer" {
+resource "google_storage_bucket_iam_member" "metadata_raw_object_viewer" {
   bucket = google_storage_bucket.gcp_event_media.name
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${module.metadata_sa.service_account_email}"
