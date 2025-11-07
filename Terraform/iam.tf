@@ -17,6 +17,7 @@ module "backend_sa" {
     rules = [
         "roles/run.invoker",
         "roles/artifactregistry.reader",
-        "roles/storage.objectCreator"
+        "roles/storage.objectCreator",
+        "roles/storage.legacyBucketReader"
     ]
 }
