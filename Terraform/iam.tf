@@ -21,3 +21,15 @@ module "backend_sa" {
         "roles/storage.viewer"
     ]
 }
+
+resource "google_storage_bucket_iam_member" "backend_bucket_reader" {
+  bucket = google_storage_bucket.gcp_event_media.name 
+  role   = "roles/storage.legacyBucketReader"
+  member = module.backend_sa.service_account_email 
+}
+
+resource "google_storage_bucket_iam_member" "backend_bucket_creator" {
+  bucket = google_storage_bucket.gcp_event_media.name
+  role   = "roles/storage.objectCreator"
+  member = module.backend_sa.service_account_email
+}
