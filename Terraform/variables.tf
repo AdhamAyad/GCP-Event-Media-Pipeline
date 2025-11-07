@@ -14,3 +14,8 @@ variable "gcp_event_media_name" {
        type = string
        description = "Bucket Name"
     }    
+
+variable "gcp_event_media_processed_bucket_name" {
+       type = string
+       description = "Bucket Name"
+    }        
