@@ -75,3 +75,13 @@ resource "google_storage_bucket_iam_member" "thumbnail_processed_object_creator"
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${module.media_thumbnail_sa.service_account_email}"
 }
+
+data "google_storage_project_service_account" "gcs_service_account" {
+  project = var.project_id
+}
+
+resource "google_pubsub_topic_iam_member" "gcs_pubsub_publisher" {
+  topic   = google_pubsub_topic.bucket_events_topic.id 
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${data.google_storage_project_service_account.gcs_service_account.email_address}"
+}
