@@ -13,11 +13,10 @@ FROM python:3.12-slim AS final
 WORKDIR /app
 
 COPY --from=builder /root/.local /root/.local
-
 ENV PATH=/root/.local/bin:$PATH
 
 COPY main.py .
 
 EXPOSE 8080
 
-CMD exec gunicorn --bind :$PORT --workers 1 main:app
+CMD ["sh","-c","gunicorn --bind :$PORT --workers 1 main:app"]
