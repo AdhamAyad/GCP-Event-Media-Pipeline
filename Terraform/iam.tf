@@ -118,3 +118,25 @@ resource "google_storage_bucket_iam_member" "display_processed_object_creator" {
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${module.media_display_sa.service_account_email}"
 }
+
+module "metadata_sa" {
+    source = "./modules/service_account"
+    account_id = "media-display-sa"
+    display_name = "Media Display Service Account"
+    project_id = var.project_id
+    rules = [
+      "roles/datastore.user"
+    ]
+}
+
+resource "google_storage_bucket_iam_member" "display_raw_bucket_reader" {
+  bucket = google_storage_bucket.gcp_event_media.name
+  role   = "roles/storage.legacyBucketReader"
+  member = "serviceAccount:${module.metadata_sa.service_account_email}"
+}
+
+resource "google_storage_bucket_iam_member" "display_raw_object_viewer" {
+  bucket = google_storage_bucket.gcp_event_media.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${module.metadata_sa.service_account_email}"
+}

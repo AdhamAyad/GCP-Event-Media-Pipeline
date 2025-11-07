@@ -32,6 +32,21 @@ module "media_display_sub" {
   ]
 }
 
+module "metadata_sub" {
+  source = "./modules/pubsub_subscription" 
+
+  subscription_name           = "metadata-sub"
+  topic_name                  = google_pubsub_topic.bucket_events_topic.name
+  dlt_topic_id                = google_pubsub_topic.dlt_topic.id
+  push_endpoint               = module.metadata.cloud_run_endpoint
+  invoker_service_account_email = module.subscription_sa.service_account_email
+
+  depends_on = [
+    module.metadata,
+    module.subscription_sa
+  ]
+}
+
 resource "google_storage_notification" "bucket_uploads" {
   bucket         = google_storage_bucket.gcp_event_media.name
   payload_format = "JSON_API_V1"

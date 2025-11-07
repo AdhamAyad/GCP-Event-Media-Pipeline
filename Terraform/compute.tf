@@ -85,3 +85,25 @@ module "media_display" {
     module.backend_sa,
     ]
 }
+
+module "metadata" {
+  source                = "./modules/cloud_run/"
+  service_name          = "metadata"
+  region                = var.region
+  image                 = "gcr.io/google-samples/hello-app:1.0"
+  port                  = 8080
+  service_account_email = module.metadata_sa.service_account_email
+  auth                  = "private"
+  by_req                = true
+  min_instances         = 0
+  max_instances         = 3
+  ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  env_vars = {
+    "RAW_BUCKET_NAME" = google_storage_bucket.gcp_event_media.name,
+    "FIRESTORE_COLLECTION_NAME" = local.images_collection_name
+  }
+  depends_on            = [
+    google_storage_bucket.gcp_event_media,
+    
+    ]
+}
