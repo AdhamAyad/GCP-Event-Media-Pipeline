@@ -101,5 +101,6 @@ def handle_pubsub_message():
         print(f"Failed to write to Firestore for {file_name}: {e}")
         return "Internal Server Error", 500
 
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

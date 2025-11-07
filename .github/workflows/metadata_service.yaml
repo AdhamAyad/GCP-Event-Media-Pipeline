@@ -19,7 +19,7 @@ jobs:
           uses: actions/checkout@v4     
         - name: Build Docker Image
           run: |
-           docker build -t  ${{secrets.REPO_URL}}metadta:${{github.sha}}  .  
+           docker build -t  ${{secrets.REPO_URL}}metadata:${{github.sha}}  .  
 
         - name: Auth to Google Cloud
           uses: google-github-actions/auth@v2
