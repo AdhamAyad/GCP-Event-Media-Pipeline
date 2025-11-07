@@ -1,0 +1,3 @@
+.terraform/
+GCP-Event-Media-Pipeline.json
+*.tfstate
