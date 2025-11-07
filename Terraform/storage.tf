@@ -49,5 +49,5 @@ resource "google_firestore_database" "matedata_db" {
   name        = "metadata-db"
   project     = var.project_id
   location_id = var.region
-  type        = "NATIVE"
+  type        = "FIRESTORE_NATIVE"
 }
