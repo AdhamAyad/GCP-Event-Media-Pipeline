@@ -1,5 +1,6 @@
 flask
 Pillow
+gunicorn
 google-cloud-storage
 google-cloud-firestore
 google-cloud-core
