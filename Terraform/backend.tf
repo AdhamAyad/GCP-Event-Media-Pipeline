@@ -9,6 +9,5 @@ terraform {
   backend "gcs" {
     bucket      = "gcp-event-media-pipeline"
     prefix      = "state/"
-    credentials = "GCP-Event-Media-Pipeline.json"  
   }
 }
