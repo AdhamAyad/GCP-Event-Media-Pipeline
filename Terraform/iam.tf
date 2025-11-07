@@ -125,7 +125,9 @@ module "metadata_sa" {
     display_name = "Metadata Service Account"
     project_id = var.project_id
     rules = [
-      "roles/datastore.user"
+      "roles/datastore.user",
+      "roles/run.invoker",
+      "roles/artifactregistry.reader"
     ]
 }
 
