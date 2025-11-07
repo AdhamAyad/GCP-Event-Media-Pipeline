@@ -16,6 +16,8 @@ ENV PATH=/root/.local/bin:$PATH
 
 COPY main.py .
 
+COPY logo.png .
+
 EXPOSE 8080
 
 CMD gunicorn --bind 0.0.0.0:$PORT main:app
