@@ -121,8 +121,8 @@ resource "google_storage_bucket_iam_member" "display_processed_object_creator" {
 
 module "metadata_sa" {
     source = "./modules/service_account"
-    account_id = "media-display-sa"
-    display_name = "Media Display Service Account"
+    account_id = "metadata-sa"
+    display_name = "Metadata Service Account"
     project_id = var.project_id
     rules = [
       "roles/datastore.user"
