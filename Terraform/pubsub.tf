@@ -43,8 +43,7 @@ resource "google_storage_notification" "bucket_uploads" {
   ]
 
   depends_on = [
-    google_pubsub_topic.bucket_events_topic,
-    google_storage_bucket.gcp_event_media
+    google_pubsub_topic_iam_member.gcs_pubsub_publisher
     ]
 }
 
