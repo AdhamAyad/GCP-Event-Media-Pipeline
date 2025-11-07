@@ -12,42 +12,35 @@ app = Flask(__name__)
 RAW_BUCKET_NAME = os.environ.get("RAW_BUCKET_NAME")
 COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME") 
 
-storage_client = storage.Client()
-db = firestore.Client() 
-
-raw_bucket = None
-
-try:
-    if RAW_BUCKET_NAME:
-        raw_bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
-except Exception as e:
-    print(f"Error initializing bucket: {e}")
-
+storage_client = storage.Client() 
 
 @app.route('/', methods=['POST'])
 def handle_pubsub_message():
-    if not raw_bucket or not COLLECTION_NAME:
-        print("Fatal Error: Bucket or Collection name not defined.")
+    try:
+        raw_bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
+        db = firestore.Client()
+    except Exception as e:
+        print(f"FATAL ERROR: Failed to initialize resources (Bucket or Firestore): {e}")
+        return "Server configuration error", 500
+
+    if not COLLECTION_NAME:
+        print("Fatal Error: Collection name not defined.")
         return "Server configuration error", 500
 
     envelope = request.get_json(silent=True)
     if not envelope or "message" not in envelope:
-        print("Invalid message.")
         return "Bad Request", 400
 
     try:
         data_str = base64.b64decode(envelope['message']['data']).decode('utf-8')
         gcs_event = json.loads(data_str)
         
-        bucket_name = gcs_event.get('bucket')
         file_name = gcs_event.get('name')
-        
         file_size_bytes = gcs_event.get('size')
         content_type = gcs_event.get('contentType', 'application/octet-stream')
 
-        if not file_name or bucket_name != RAW_BUCKET_NAME:
-            print(f"Ignoring message: (File: {file_name}, Bucket: {bucket_name})")
-            return "", 204
+        if not file_name or gcs_event.get('bucket') != RAW_BUCKET_NAME:
+            return "", 204 
 
     except Exception as e:
         print(f"Error parsing message: {e}")
@@ -57,8 +50,6 @@ def handle_pubsub_message():
     
     if content_type.startswith('image/'):
         try:
-            print(f"Starting metadata processing for: {file_name}")
-
             source_blob = raw_bucket.blob(file_name)
             in_memory_file = io.BytesIO()
             source_blob.download_to_file(in_memory_file)
@@ -70,13 +61,11 @@ def handle_pubsub_message():
 
         except Exception as e:
             print(f"Failed to extract image dimensions for {file_name}: {e}")
-    else:
-        print(f"Skipping dimension extraction, not an image: {content_type}")
-
+            
     try:
-        file_stem = os.path.splitext(file_name)[0]
+        doc_id = os.path.splitext(file_name)[0] 
         
-        doc_ref = db.collection(COLLECTION_NAME).document(file_stem)
+        doc_ref = db.collection(COLLECTION_NAME).document(doc_id)
 
         metadata = {
             'original_filename': file_name,
@@ -88,19 +77,19 @@ def handle_pubsub_message():
                 'height_px': height,
                 'format': image_format
             },
-            'last_updated_metadata': firestore.SERVER_TIMESTAMP
+            'last_updated_metadata': firestore.SERVER_TIMESTAMP,
+            'status': 'Processing'
         }
 
         doc_ref.set(metadata, merge=True)
 
         print(f"Metadata successfully written for: {file_name}")
         
-        return "", 204
+        return "", 204 
 
     except Exception as e:
-        print(f"Failed to write to Firestore for {file_name}: {e}")
+        print(f"Failed to write to Firestore or process file {file_name}: {e}")
         return "Internal Server Error", 500
-
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
