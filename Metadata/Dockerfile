@@ -20,4 +20,4 @@ COPY main.py .
 
 EXPOSE 8080
 
-CMD ["gunicorn","--bind","0.0.0.0:$PORT","main:app"]
+CMD exec gunicorn --bind :$PORT --workers 1 main:app
