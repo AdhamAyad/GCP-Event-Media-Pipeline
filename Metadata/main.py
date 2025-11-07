@@ -8,37 +8,39 @@ from PIL import Image
 
 app = Flask(__name__)
 
-RAW_BUCKET_NAME = os.environ["RAW_BUCKET_NAME"]
-COLLECTION = os.environ["FIRESTORE_COLLECTION_NAME"]
+RAW_BUCKET_NAME = os.environ.get("RAW_BUCKET_NAME")
+FIRESTORE_COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME")
 
 storage_client = storage.Client()
 fire_db = firestore.Client()
 raw_bucket = storage_client.bucket(RAW_BUCKET_NAME)
 
 @app.route('/', methods=['POST'])
-def handle_pubsub():
+def handle_pubsub_message():
     try:
-        envelope = request.get_json()
+        envelope = request.get_json(silent=True)
         data_str = base64.b64decode(envelope['message']['data']).decode('utf-8')
         gcs_event = json.loads(data_str)
-        file_name = gcs_event['name']
+        bucket_name = gcs_event.get('bucket')
+        file_name = gcs_event.get('name')
+        if not file_name or bucket_name != RAW_BUCKET_NAME:
+            return "", 204
     except:
-        return "bad req", 400
+        return "Bad Request", 400
 
     try:
         blob = raw_bucket.blob(file_name)
-        mem = io.BytesIO()
-        blob.download_to_file(mem)
-        mem.seek(0)
+        mem_file = io.BytesIO()
+        blob.download_to_file(mem_file)
+        mem_file.seek(0)
 
-        img = Image.open(mem)
+        img = Image.open(mem_file)
         width, height = img.size
         fmt = img.format
         size_bytes = blob.size
 
         doc_id = os.path.splitext(file_name)[0]
-
-        fire_db.collection(COLLECTION).document(doc_id).set({
+        fire_db.collection(FIRESTORE_COLLECTION_NAME).document(doc_id).set({
             "file_name": file_name,
             "width": width,
             "height": height,
@@ -49,8 +51,8 @@ def handle_pubsub():
         return "", 204
 
     except Exception as e:
-        print(e)
-        return "err", 500
+        print(f"Error processing {file_name}: {e}")
+        return "Internal Server Error", 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
