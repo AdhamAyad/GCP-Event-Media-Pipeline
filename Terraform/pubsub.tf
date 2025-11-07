@@ -2,35 +2,34 @@ resource "google_pubsub_topic" "bucket_events_topic" {
   name = "bucket-events-topic"
 }
 
-resource "google_pubsub_subscription" "media_thumbnail_sub" {
-  name  = "media-thumbnail-sub"
-  topic = google_pubsub_topic.bucket_events_topic.name
+module "media_thumbnail_sub" {
+  source = "./modules/pubsub_subscription" 
 
-  message_retention_duration = "604800s"
-
-  ack_deadline_seconds = 180
-
-  retry_policy {
-    minimum_backoff = "5s"
-    maximum_backoff = "60s"
-  }
-
-  dead_letter_policy {
-    dead_letter_topic     = google_pubsub_topic.dlt_topic.id
-    max_delivery_attempts = 5
-  }
-
-  push_config {
-    push_endpoint = module.media_thumbnail.cloud_run_endpoint
-
-    oidc_token {
-      service_account_email = module.subscription_sa.service_account_email
-    }
-  }
+  subscription_name           = "media-thumbnail-sub"
+  topic_name                  = google_pubsub_topic.bucket_events_topic.name
+  dlt_topic_id                = google_pubsub_topic.dlt_topic.id
+  push_endpoint               = module.media_thumbnail.cloud_run_endpoint
+  invoker_service_account_email = module.subscription_sa.service_account_email
 
   depends_on = [
-    google_pubsub_topic.bucket_events_topic,
-    ]
+    module.media_thumbnail,
+    module.subscription_sa
+  ]
+}
+
+module "media_display_sub" {
+  source = "./modules/pubsub_subscription" 
+
+  subscription_name           = "media-display-sub"
+  topic_name                  = google_pubsub_topic.bucket_events_topic.name
+  dlt_topic_id                = google_pubsub_topic.dlt_topic.id
+  push_endpoint               = module.media_display.cloud_run_endpoint
+  invoker_service_account_email = module.subscription_sa.service_account_email
+
+  depends_on = [
+    module.media_display,
+    module.subscription_sa
+  ]
 }
 
 resource "google_storage_notification" "bucket_uploads" {

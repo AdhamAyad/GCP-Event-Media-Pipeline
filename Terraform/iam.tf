@@ -85,3 +85,36 @@ resource "google_pubsub_topic_iam_member" "gcs_pubsub_publisher" {
   role    = "roles/pubsub.publisher"
   member  = "serviceAccount:${data.google_storage_project_service_account.gcs_service_account.email_address}"
 }
+
+module "media_display_sa" {
+    source = "./modules/service_account"
+    account_id = "media-display-sa"
+    display_name = "Media Display Service Account"
+    project_id = var.project_id
+    rules = [
+    ]
+}
+
+resource "google_storage_bucket_iam_member" "display_raw_bucket_reader" {
+  bucket = google_storage_bucket.gcp_event_media.name
+  role   = "roles/storage.legacyBucketReader"
+  member = "serviceAccount:${module.media_display_sa.service_account_email}"
+}
+
+resource "google_storage_bucket_iam_member" "display_raw_object_viewer" {
+  bucket = google_storage_bucket.gcp_event_media.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${module.media_display_sa.service_account_email}"
+}
+
+resource "google_storage_bucket_iam_member" "display_processed_bucket_reader" {
+  bucket = google_storage_bucket.gcp_event_media_processed_bucket.name
+  role   = "roles/storage.legacyBucketReader"
+  member = "serviceAccount:${module.media_display_sa.service_account_email}"
+}
+
+resource "google_storage_bucket_iam_member" "display_processed_object_creator" {
+  bucket = google_storage_bucket.gcp_event_media_processed_bucket.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${module.media_display_sa.service_account_email}"
+}
