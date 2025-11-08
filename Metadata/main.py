@@ -10,24 +10,32 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
+# --- قراءة جميع الإعدادات من متغيرات البيئة (Environment Variables) ---
+# 1. اسم قاعدة بيانات Firestore (مثل: metadata-db)
+FIRESTORE_DATABASE_NAME = os.environ.get("FIRESTORE_DB_NAME", "(default)")
+
+# 2. اسم المجموعة (Collection) في Firestore (مثل: images_collection_name)
+FIRESTORE_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_NAME", "gcs_file_events")
+
+# 3. اسم الباكيت الخام للتحقق من مصدر الحدث (مثل: gcp_event_media)
+RAW_BUCKET_NAME = os.environ.get("RAW_BUCKET_NAME")
+
+
 # تهيئة Firebase Admin SDK
-# في بيئات Google Cloud (مثل Cloud Functions/Run)، سيتم العثور على بيانات الاعتماد
-# تلقائيًا عبر "Application Default Credentials" (ADC).
+db = None
 try:
     cred = credentials.ApplicationDefault()
     firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    print("تمت تهيئة Firestore بنجاح.")
+    
+    # نمرر اسم قاعدة البيانات الصريح
+    db = firestore.client(database=FIRESTORE_DATABASE_NAME)
+    
+    display_name = FIRESTORE_DATABASE_NAME if FIRESTORE_DATABASE_NAME != "(default)" else "الافتراضية (default)"
+    print(f"تمت تهيئة Firestore بنجاح للـ Database: {display_name} والمجموعة: {FIRESTORE_COLLECTION}")
+
 except Exception as e:
     print(f"خطأ في تهيئة Firebase: {e}")
-    # إذا فشلت التهيئة، سنسمح باستمرار التطبيق ولكن سنقوم بالرد بخطأ عند محاولة التخزين
     db = None
-
-# اسم المجموعة التي سيتم التخزين فيها
-# يمكنك تغيير هذا الاسم (مثلاً: 'gcs_file_logs')
-# في بيئة Canvas، قد تحتاج إلى استخدام مسار محدد مثل:
-# f"artifacts/{appId}/public/data/gcs_events"
-FIRESTORE_COLLECTION = "gcs_file_events"
 
 @app.route('/', methods=['POST'])
 def handle_pubsub_message():
@@ -35,9 +43,16 @@ def handle_pubsub_message():
     يستقبل الرسالة من Pub/Sub، ويقوم بتحليلها لاستخلاص اسم الملف،
     ثم يخزن اسم الملف في Firestore.
     """
+    # التحقق من التهيئة
     if db is None:
         print("خطأ فادح: لم يتم تهيئة Firestore.")
         return "Server configuration error (Firestore not initialized)", 500
+        
+    # التحقق من وجود اسم الباكيت الخام
+    if not RAW_BUCKET_NAME:
+        print("خطأ فادح: متغير البيئة RAW_BUCKET_NAME غير مُعرّف.")
+        return "Server configuration error (RAW_BUCKET_NAME missing)", 500
+
 
     envelope = request.get_json(silent=True)
     if not envelope or "message" not in envelope:
@@ -51,13 +66,14 @@ def handle_pubsub_message():
         # 2. تحليل الحمولة (Payload) إلى حدث GCS
         gcs_event = json.loads(data_str)
         
-        # 3. استخلاص اسم الملف كما طلبته (نفس الكود الأصلي)
+        # 3. استخلاص اسم الملف والباكيت
         file_name = gcs_event.get('name')
         bucket_name = gcs_event.get('bucket')
 
-        if not file_name:
-            print(f"تجاهل الرسالة: اسم الملف مفقود في حمولة GCS.")
-            return "File name not found in GCS event", 204
+        # 🚨 إضافة التحقق الأمني: تأكيد أن الحدث جاء من الباكيت الذي نتوقعه
+        if not file_name or bucket_name != RAW_BUCKET_NAME:
+            print(f"تجاهل الرسالة: (ملف: {file_name}, باكيت: {bucket_name}). ليست من الباكيت المطلوب ({RAW_BUCKET_NAME}).")
+            return "", 204 # نرد بنجاح (204) لتجنب إعادة إرسال الرسالة
 
     except Exception as e:
         print(f"خطأ في تحليل الرسالة: {e}")
@@ -66,9 +82,7 @@ def handle_pubsub_message():
     try:
         print(f"ملف GCS المُستلَم: {file_name} من الباكيت: {bucket_name}")
 
-        # 4. التخزين في Firestore
-        # نستخدم اسم الملف كـ Document ID لأنه فريد ومميز كما طلبت
-        
+        # 4. التخزين في Firestore باستخدام اسم الملف كـ Document ID واسم المجموعة من ENV
         doc_ref = db.collection(FIRESTORE_COLLECTION).document(file_name)
         
         data_to_save = {
@@ -89,6 +103,5 @@ def handle_pubsub_message():
         return "Internal Server Error during Firestore save", 500
 
 if __name__ == '__main__':
-    # لتشغيل محلي لاختبار بسيط
     PORT = int(os.environ.get('PORT', 8080))
     app.run(debug=True, host='0.0.0.0', port=PORT)

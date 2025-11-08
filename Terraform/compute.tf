@@ -100,7 +100,8 @@ module "metadata" {
   ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY"
   env_vars = {
     "RAW_BUCKET_NAME" = google_storage_bucket.gcp_event_media.name,
-    "FIRESTORE_COLLECTION_NAME" = local.images_collection_name
+    "FIRESTORE_COLLECTION_NAME" = local.images_collection_name,
+    "FIRESTORE_DB_NAME" = google_firestore_database.matedata_db.name
   }
   depends_on            = [
     google_storage_bucket.gcp_event_media,
