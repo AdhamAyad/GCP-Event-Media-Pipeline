@@ -27,18 +27,6 @@ resource "google_storage_bucket_iam_member" "public_access" {
   member = "allUsers"  
 }
 
-resource "google_storage_bucket_iam_member" "backend_processed_bucket_reader" {
-  bucket = google_storage_bucket.gcp_event_media_processed_bucket.name
-  role   = "roles/storage.objectViewer"   
-  member = "serviceAccount:${module.backend_sa.service_account_email}"
-}
-
-resource "google_storage_bucket_iam_member" "backend_processed_bucket_bucket_reader" {
-  bucket = google_storage_bucket.gcp_event_media_processed_bucket.name
-  role   = "roles/storage.legacyBucketReader"   
-  member = "serviceAccount:${module.backend_sa.service_account_email}"
-}
-
 resource "google_storage_bucket_iam_member" "backend_raw_bucket_reader" {
   bucket = google_storage_bucket.gcp_event_media.name
   role   = "roles/storage.legacyBucketReader" 
