@@ -21,7 +21,7 @@ resource "google_monitoring_alert_policy" "dlt_alert" {
       
       comparison      = "COMPARISON_GT"
       threshold_value = 0
-      duration        = "60s"
+      duration        = "0s"
 
       aggregations {
         alignment_period   = "60s"
