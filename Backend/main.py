@@ -153,6 +153,7 @@ def gallery():
                     method="GET",
                 )
                 data['signed_thumb_url'] = signed_url
+
             except Exception as e:
                 print(f"Error generating signed URL for {doc.id}: {e}")
                 data['signed_thumb_url'] = "https://placehold.co/250x200?text=Error:NoAccess"
