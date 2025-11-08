@@ -1,73 +1,68 @@
 import os
-from flask import Flask, request, jsonify, render_template_string
-from google.cloud import storage, firestore
-from werkzeug.utils import secure_filename
+import uuid
+import datetime # <-- (إضافة جديدة)
+from flask import Flask, request, jsonify, render_template_string # <-- (إضافة جديدة)
+from google.cloud import storage, firestore # <-- (إضافة جديدة)
 
-app = Flask(_name_)
+app = Flask(__name__)
 
+# --- (الكود القديم الخاص بك - كما هو) ---
 RAW_BUCKET_NAME = os.environ.get("RAW_BUCKET_NAME")
+
+storage_client = storage.Client()
+bucket = None # (هذا هو الباكيت الخاص بالرفع)
+
+if RAW_BUCKET_NAME:
+    try:
+        bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
+    except Exception as e:
+        print(f"Error initializing GCS bucket '{RAW_BUCKET_NAME}': {e}")
+        bucket = None
+else:
+    print("FATAL ERROR: RAW_BUCKET_NAME environment variable is not set.")
+
+# --- (متغيرات البيئة الجديدة - إضافة) ---
 PROCESSED_BUCKET_NAME = os.environ.get("PROCESSED_BUCKET_NAME")
 COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME")
 FIRESTORE_DB_NAME = os.environ.get("FIRESTORE_DB_NAME")
 
+# --- (الـ Endpoint القديم - كما هو) ---
+@app.route('/')
+def health_check():
+    return jsonify({"message": "Backend API (Proxy Upload) is running."}), 200
 
+# --- (الـ Endpoint القديم - كما هو) ---
 @app.route('/upload-to-gcs', methods=['POST'])
 def upload_to_gcs():
+    if not bucket:
+        return jsonify({"error": "GCS Bucket is not configured on server."}), 500
+
     if 'image_file' not in request.files:
-        return jsonify({"error": "No image_file part"}), 400
+        return jsonify({"error": "No 'image_file' found in request."}), 400
 
     file = request.files['image_file']
+
     if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        return jsonify({"error": "Empty file uploaded."}), 400
 
-    if file:
-        try:
-            storage_client = storage.Client()
-            bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
-            
-            file_name = secure_filename(file.filename) 
-            blob = bucket.blob(file_name)
-            
-            file_content = file.read()
-            file_mimetype = file.content_type
-            
-            blob.upload_from_string(
-                file_content,
-                content_type=file_mimetype
-            )
-            
-            return jsonify({
-                "message": "File uploaded successfully",
-                "filename": file_name,
-                "bucket": RAW_BUCKET_NAME
-            }), 200
-
-        except Exception as e:
-            print(f"Error during GCS upload: {e}")
-            return jsonify({"error": f"Internal Server Error: {e}"}), 500
-
-@app.route('/api/dataset', methods=['GET'])
-def get_dataset():
     try:
-        db = firestore.Client(database=FIRESTORE_DB_NAME)
+        file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
+        unique_filename = f"{uuid.uuid4()}{'.' + file_extension if file_extension else ''}"
         
-        docs = db.collection(COLLECTION_NAME)\
-                 .order_by('last_updated_metadata', direction=firestore.Query.DESCENDING)\
-                 .limit(20)\
-                 .stream()
+        blob = bucket.blob(unique_filename)
+        
+        blob.upload_from_file(file.stream, content_type=file.mimetype)
 
-        dataset = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['doc_id'] = doc.id
-            dataset.append(data)
-            
-        return jsonify(dataset), 200
+        return jsonify({
+            "message": "File proxied and uploaded to GCS successfully.",
+            "filename": unique_filename,
+            "bucket": RAW_BUCKET_NAME
+        }), 201
 
     except Exception as e:
-        print(f"Error reading Firestore: {e}")
-        return jsonify({"error": f"Failed to retrieve dataset: {e}"}), 500
+        return jsonify({"error": f"Failed to upload to GCS: {str(e)}"}), 500
 
+# --- (الإضافات الجديدة - قالب HTML) ---
 GALLERY_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -97,8 +92,8 @@ GALLERY_TEMPLATE = """
             {% else %}
                 {% for item in dataset %}
                 <div class="card">
-                    <!-- (نستخدم الباكيت الجديد وصورة الـ Thumbnail) -->
-                    <img src="https://storage.googleapis.com/{{ processed_bucket }}/{{ item.doc_id }}_thumb.jpg" 
+                    <!-- (نستخدم الرابط المؤقت (Signed URL)) -->
+                    <img src="{{ item.signed_thumb_url }}" 
                          alt="{{ item.doc_id }}"
                          onerror="this.src='https://placehold.co/250x200?text=Processing...';">
                     
@@ -123,11 +118,59 @@ GALLERY_TEMPLATE = """
 </html>
 """
 
+# --- (الإضافات الجديدة - Endpoint المعرض) ---
 @app.route('/gallery', methods=['GET'])
 def gallery():
-    """
-    HTML Endpoint: يعرض الداتا ست كصفحة ويب.
-    """
+    if not COLLECTION_NAME or not FIRESTORE_DB_NAME or not PROCESSED_BUCKET_NAME:
+        return render_template_string(GALLERY_TEMPLATE, error="متغيرات البيئة الخاصة بالداتا ست غير مُعدّة.")
+
+    try:
+        # (تهيئة العملاء داخل الدالة - Lazy Init)
+        db = firestore.Client(database=FIRESTORE_DB_NAME)
+        
+        # (يجب تهيئة عميل GCS جديد هنا للـ processed_bucket)
+        gallery_storage_client = storage.Client()
+        processed_bucket = gallery_storage_client.get_bucket(PROCESSED_BUCKET_NAME)
+        
+        docs = db.collection(COLLECTION_NAME)\
+                 .order_by('last_updated_metadata', direction=firestore.Query.DESCENDING)\
+                 .limit(20)\
+                 .stream()
+
+        dataset = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['doc_id'] = doc.id
+            
+            # (إنشاء Signed URL للباكيت الـ Private)
+            try:
+                thumb_blob_name = f"{doc.id}_thumb.jpg"
+                thumb_blob = processed_bucket.blob(thumb_blob_name)
+                
+                signed_url = thumb_blob.generate_signed_url(
+                    version="v4",
+                    expiration=datetime.timedelta(minutes=10),
+                    method="GET",
+                )
+                data['signed_thumb_url'] = signed_url
+            except Exception as e:
+                print(f"Error generating signed URL for {doc.id}: {e}")
+                data['signed_thumb_url'] = "https://placehold.co/250x200?text=Error:NoAccess"
+
+            dataset.append(data)
+            
+        return render_template_string(
+            GALLERY_TEMPLATE, 
+            dataset=dataset
+        )
+
+    except Exception as e:
+        print(f"Error reading Firestore for gallery: {e}")
+        return render_template_string(GALLERY_TEMPLATE, error=f"فشل جلب الداتا ست: {e}")
+
+# --- (الإضافات الجديدة - Endpoint الـ API) ---
+@app.route('/api/dataset', methods=['GET'])
+def get_dataset():
     try:
         db = firestore.Client(database=FIRESTORE_DB_NAME)
         
@@ -142,20 +185,12 @@ def gallery():
             data['doc_id'] = doc.id
             dataset.append(data)
             
-        return render_template_string(
-            GALLERY_TEMPLATE, 
-            dataset=dataset, 
-            processed_bucket=PROCESSED_BUCKET_NAME
-        )
+        return jsonify(dataset), 200
 
     except Exception as e:
-        print(f"Error reading Firestore for gallery: {e}")
-        return render_template_string(GALLERY_TEMPLATE, error=f"فشل جلب الداتا ست: {e}")
+        print(f"Error reading Firestore: {e}")
+        return jsonify({"error": f"Failed to retrieve dataset: {e}"}), 500
 
-
-@app.route('/')
-def home():
-    return jsonify({"message": "Backend API is running and ready to process uploads or serve the gallery."}), 200
-
-if _name_ == '_main_':
+# --- (الكود القديم الخاص بك - كما هو) ---
+if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
