@@ -8,7 +8,7 @@ BACKEND_API_URL = os.environ.get("BACK_END_API")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <title>Python Frontend (Proxy Upload)</title>
@@ -24,35 +24,32 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <main>
-        <h1>نظام الرفع (GCP Event Media Pipeline)</h1>
+        <h1>Upload System (GCP Event Media Pipeline)</h1>
         
-        <!-- رسالة النجاح أو الفشل بعد الرفع -->
         {% if upload_message %}
             <div class="msg {{ 'success' if success else 'error' }}">
                 {{ upload_message }}
             </div>
         {% endif %}
 
-        <!-- فورم رفع الصورة -->
-        <h2>1. ارفع صورة جديدة</h2>
+        <h2>1. Upload New Image</h2>
         <form action="/upload" method="post" enctype="multipart/form-data">
-            <label for="file_to_upload">اختر صورة لرفعها:</label>
+            <label for="file_to_upload">Choose an image to upload:</label>
             <input type="file" name="file_to_upload" id="file_to_upload" accept="image/*" required>
-            <input type="submit" value="رفع الصورة">
+            <input type="submit" value="Upload Image">
         </form>
 
         <hr style="margin-top: 2rem;">
 
-        <!-- جزء اختبار الاتصال (كما كان) -->
-        <h2>2. اختبار الاتصال بالباك إند</h2>
-        <p><b>رابط الباك إند المستخدم (من متغير البيئة):</b> {{ backend_url }}</p>
+        <h2>2. Backend Connection Test</h2>
+        <p><b>Backend URL (from environment):</b> {{ backend_url }}</p>
         {% if connection_error %}
             <div class="msg error">
-                <strong>خطأ اتصال:</strong> {{ connection_error }}
+                <strong>Connection Error:</strong> {{ connection_error }}
             </div>
         {% else %}
             <div class="msg success">
-                <strong>حالة الاتصال:</strong> {{ connection_data }}
+                <strong>Connection Status:</strong> {{ connection_data }}
             </div>
         {% endif %}
     </main>
@@ -61,13 +58,10 @@ HTML_TEMPLATE = """
 """
 
 def get_connection_status():
-    """
-    دالة لفحص الاتصال بالـ API (لجزء اختبار الاتصال).
-    """
     if not BACKEND_API_URL:
         return {
-            "backend_url": "غير مُعرّف (Not Set)",
-            "connection_error": "متغير البيئة BACKEND_API_URL غير مُعدّ."
+            "backend_url": "Not Set",
+            "connection_error": "Environment variable BACKEND_API_URL is not configured."
         }
     
     try:
@@ -75,62 +69,53 @@ def get_connection_status():
         response.raise_for_status()
         return {
             "backend_url": BACKEND_API_URL,
-            "connection_data": response.json().get("message", "تم الاتصال بنجاح")
+            "connection_data": response.json().get("message", "Connected Successfully")
         }
     except requests.exceptions.RequestException as e:
         return {
             "backend_url": BACKEND_API_URL,
-            "connection_error": f"فشل الاتصال بالباك إند: {str(e)}"
+            "connection_error": f"Failed to connect to backend: {str(e)}"
         }
 
 @app.route('/')
 def home():
-    """
-    يعرض الصفحة الرئيسية واختبار الاتصال.
-    """
     context = get_connection_status()
     return render_template_string(HTML_TEMPLATE, **context)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """
-    هذه النقطة (Endpoint) تستقبل الملف من المتصفح،
-    ثم تقوم هي (كسيرفر) برفعه إلى الباك إند API.
-    """
     context = get_connection_status()
     
     if 'file_to_upload' not in request.files:
-        context['upload_message'] = "لم يتم اختيار ملف."
+        context['upload_message'] = "No file selected."
         context['success'] = False
         return render_template_string(HTML_TEMPLATE, **context), 400
 
     file = request.files['file_to_upload']
 
     if file.filename == '':
-        context['upload_message'] = "تم إرسال ملف فارغ."
+        context['upload_message'] = "Empty file submitted."
         context['success'] = False
         return render_template_string(HTML_TEMPLATE, **context), 400
 
     if not BACKEND_API_URL:
-        context['upload_message'] = "خطأ فادح: رابط الباك إند غير معروف للسيرفر."
+        context['upload_message'] = "Critical Error: Backend URL not configured."
         context['success'] = False
         return render_template_string(HTML_TEMPLATE, **context), 500
 
     try:
         files_to_proxy = {'image_file': (file.filename, file.stream, file.mimetype)}
-        
         upload_url = f"{BACKEND_API_URL}/upload-to-gcs"
         
-        response = requests.post(upload_url, files=files_to_proxy, timeout=30) 
-        
-        response.raise_for_status() 
+        response = requests.post(upload_url, files=files_to_proxy, timeout=30)
+        response.raise_for_status()
         
         response_data = response.json()
-        context['upload_message'] = f"نجح الرفع! اسم الملف الفريد: {response_data.get('filename')}"
+        context['upload_message'] = f"Upload successful! Unique filename: {response_data.get('filename')}"
         context['success'] = True
         
     except requests.exceptions.RequestException as e:
-        context['upload_message'] = f"فشل الرفع إلى الباك إند: {str(e)}"
+        context['upload_message'] = f"Failed to upload to backend: {str(e)}"
         context['success'] = False
     
     return render_template_string(HTML_TEMPLATE, **context)
