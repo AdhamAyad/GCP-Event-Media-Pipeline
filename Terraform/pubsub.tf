@@ -47,6 +47,22 @@ module "metadata_sub" {
   ]
 }
 
+module "ai_labeling_sub" {
+  source = "./modules/pubsub_subscription" 
+
+  subscription_name           = "ai-labeling-sub"
+  topic_name                  = google_pubsub_topic.bucket_events_topic.name
+  dlt_topic_id                = google_pubsub_topic.dlt_topic.id
+  push_endpoint               = module.ai_labeling.cloud_run_endpoint
+  invoker_service_account_email = module.subscription_sa.service_account_email
+  ack_deadline_seconds = 240
+
+  depends_on = [
+    module.ai_labeling,
+    module.subscription_sa
+  ]
+}
+
 resource "google_storage_notification" "bucket_uploads" {
   bucket         = google_storage_bucket.gcp_event_media.name
   payload_format = "JSON_API_V1"

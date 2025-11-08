@@ -109,3 +109,27 @@ module "metadata" {
     google_storage_bucket_iam_member.metadata_raw_object_viewer,
     ]
 }
+
+module "ai_labeling" {
+  source                = "./modules/cloud_run/"
+  service_name          = "ai-labeling"
+  region                = var.region
+  image                 = "gcr.io/google-samples/hello-app:1.0"
+  port                  = 8080
+  service_account_email = module.ai_labeling_sa.service_account_email
+  auth                  = "private"
+  by_req                = true
+  min_instances         = 0
+  max_instances         = 3
+  ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  env_vars = {
+    "RAW_BUCKET_NAME" = google_storage_bucket.gcp_event_media.name,
+    "FIRESTORE_COLLECTION_NAME" = local.images_collection_name,
+    "FIRESTORE_DB_NAME" = google_firestore_database.matedata_db.name
+  }
+  depends_on            = [
+    google_storage_bucket.gcp_event_media,
+    google_storage_bucket_iam_member.metadata_raw_bucket_reader,
+    google_storage_bucket_iam_member.metadata_raw_object_viewer,
+    ]
+}
