@@ -27,7 +27,6 @@ resource "google_storage_bucket" "gcp_event_media_processed_bucket" {
   location      = var.region                   
   storage_class = "STANDARD"
   force_destroy = true
-  public_access_prevention    = "enforced"
 
   lifecycle_rule {
     action {
