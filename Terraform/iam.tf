@@ -142,3 +142,9 @@ resource "google_storage_bucket_iam_member" "metadata_raw_object_viewer" {
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${module.metadata_sa.service_account_email}"
 }
+
+resource "google_project_iam_member" "firestore_access" {
+  project = var.project_id
+  role    = "roles/datastore.user" 
+  member  = "serviceAccount:${module.metadata_sa.service_account_email}"
+}
