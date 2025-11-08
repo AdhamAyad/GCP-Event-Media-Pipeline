@@ -145,13 +145,7 @@ def gallery():
             # (إنشاء Signed URL للباكيت الـ Private)
             try:
                 thumb_blob_name = f"{doc.id}_thumb.jpg"
-                thumb_blob = processed_bucket.blob(thumb_blob_name)
                 
-                signed_url = thumb_blob.generate_signed_url(
-                    version="v4",
-                    expiration=datetime.timedelta(minutes=10),
-                    method="GET",
-                )
                 data['signed_thumb_url'] = f"https://storage.googleapis.com/{PROCESSED_BUCKET_NAME}/{doc.id}_thumb.jpg"
 
             except Exception as e:
