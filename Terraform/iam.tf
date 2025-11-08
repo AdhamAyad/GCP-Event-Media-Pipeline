@@ -22,7 +22,7 @@ module "backend_sa" {
 }
 
 resource "google_service_account_iam_member" "backend_sa_token_creator" {
-  service_account_id = module.backend_sa.service_account_email
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${module.backend_sa.service_account_email}"
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "serviceAccount:${module.backend_sa.service_account_email}"
 }
