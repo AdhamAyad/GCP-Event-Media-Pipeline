@@ -1,17 +1,21 @@
-FROM python:3.11-slim
-
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV FLASK_ENV production
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN apt-get update && apt-get install -y libjpeg-dev zlib1g-dev \
-    && pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove libjpeg-dev zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+RUN pip install --user -r requirements.txt 
 
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--threads", "8", "--timeout", "120", "main:app"]
+FROM python:3.12-slim AS final
+
+WORKDIR /app
+
+COPY --from=builder /root/.local /root/.local
+
+ENV PATH=/root/.local/bin:$PATH
+
+COPY main.py .
+
+EXPOSE 8080
+
+CMD gunicorn --bind 0.0.0.0:$PORT main:app
