@@ -1,107 +1,108 @@
 import os
 import base64
 import json
-import datetime
+import io
 from flask import Flask, request
-
-# استيراد مكتبات Firebase Admin SDK
-import firebase_admin
-from firebase_admin import credentials, firestore
+from google.cloud import storage, firestore
+from PIL import Image
 
 app = Flask(__name__)
 
-# --- قراءة جميع الإعدادات من متغيرات البيئة (Environment Variables) ---
-# 1. اسم قاعدة بيانات Firestore (مثل: metadata-db)
-FIRESTORE_DATABASE_NAME = os.environ.get("FIRESTORE_DB_NAME", "(default)")
-
-# 2. اسم المجموعة (Collection) في Firestore (مثل: images_collection_name)
-FIRESTORE_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_NAME", "gcs_file_events")
-
-# 3. اسم الباكيت الخام للتحقق من مصدر الحدث (مثل: gcp_event_media)
+# العملاء الذين يتم قراءتهم مرة واحدة (كـ Global)
 RAW_BUCKET_NAME = os.environ.get("RAW_BUCKET_NAME")
+COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME") 
+# متغير غير ضروري لكن تم إضافته ليتوافق مع Terraform
+FIRESTORE_DB_NAME = os.environ.get("FIRESTORE_DB_NAME") 
 
-
-# تهيئة Firebase Admin SDK
-db = None
-try:
-    cred = credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred)
-    
-    # نمرر اسم قاعدة البيانات الصريح
-    db = firestore.client(database=FIRESTORE_DATABASE_NAME)
-    
-    display_name = FIRESTORE_DATABASE_NAME if FIRESTORE_DATABASE_NAME != "(default)" else "الافتراضية (default)"
-    print(f"تمت تهيئة Firestore بنجاح للـ Database: {display_name} والمجموعة: {FIRESTORE_COLLECTION}")
-
-except Exception as e:
-    print(f"خطأ في تهيئة Firebase: {e}")
-    db = None
 
 @app.route('/', methods=['POST'])
 def handle_pubsub_message():
-    """
-    يستقبل الرسالة من Pub/Sub، ويقوم بتحليلها لاستخلاص اسم الملف،
-    ثم يخزن اسم الملف في Firestore.
-    """
-    # التحقق من التهيئة
-    if db is None:
-        print("خطأ فادح: لم يتم تهيئة Firestore.")
-        return "Server configuration error (Firestore not initialized)", 500
+    # التهيئة الكاملة (Storage Client و Firestore Client) تتم داخل الدالة
+    # لمنع الانهيار عند بدء تشغيل الكونتينر (Lazy Initialization)
+    try:
+        storage_client = storage.Client()
+        raw_bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
         
-    # التحقق من وجود اسم الباكيت الخام
-    if not RAW_BUCKET_NAME:
-        print("خطأ فادح: متغير البيئة RAW_BUCKET_NAME غير مُعرّف.")
-        return "Server configuration error (RAW_BUCKET_NAME missing)", 500
+        # الاتصال بـ Firestore، نمرر اسم الـ DB إذا كان موجودًا
+        db = firestore.Client(database=FIRESTORE_DB_NAME) 
+        
+    except Exception as e:
+        print(f"FATAL ERROR: Failed to initialize resources (Bucket or Firestore): {e}")
+        # نرجع 500 لإعادة المحاولة
+        return "Server configuration error", 500
 
+    if not COLLECTION_NAME:
+        print("Fatal Error: Collection name not defined.")
+        return "Server configuration error", 500
 
+    # 1. تحليل الرسالة (Parsing)
     envelope = request.get_json(silent=True)
     if not envelope or "message" not in envelope:
-        print("رسالة Pub/Sub غير صالحة أو مفقودة.")
-        return "Bad Request: Invalid Pub/Sub format", 400
+        return "Bad Request", 400
 
     try:
-        # 1. استخلاص البيانات المشفرة من مظروف Pub/Sub
         data_str = base64.b64decode(envelope['message']['data']).decode('utf-8')
-        
-        # 2. تحليل الحمولة (Payload) إلى حدث GCS
         gcs_event = json.loads(data_str)
         
-        # 3. استخلاص اسم الملف والباكيت
         file_name = gcs_event.get('name')
-        bucket_name = gcs_event.get('bucket')
+        file_size_bytes = gcs_event.get('size')
+        content_type = gcs_event.get('contentType', 'application/octet-stream')
 
-        # 🚨 إضافة التحقق الأمني: تأكيد أن الحدث جاء من الباكيت الذي نتوقعه
-        if not file_name or bucket_name != RAW_BUCKET_NAME:
-            print(f"تجاهل الرسالة: (ملف: {file_name}, باكيت: {bucket_name}). ليست من الباكيت المطلوب ({RAW_BUCKET_NAME}).")
-            return "", 204 # نرد بنجاح (204) لتجنب إعادة إرسال الرسالة
+        if not file_name or gcs_event.get('bucket') != RAW_BUCKET_NAME:
+            return "", 204 # Ack if not the target bucket
 
     except Exception as e:
-        print(f"خطأ في تحليل الرسالة: {e}")
+        print(f"Error parsing message: {e}")
         return "Message parsing error", 400
 
-    try:
-        print(f"ملف GCS المُستلَم: {file_name} من الباكيت: {bucket_name}")
+    # 2. استخراج الأبعاد
+    width, height, image_format = (None, None, None)
+    
+    if content_type.startswith('image/'):
+        try:
+            source_blob = raw_bucket.blob(file_name)
+            in_memory_file = io.BytesIO()
+            source_blob.download_to_file(in_memory_file)
+            in_memory_file.seek(0)
 
-        # 4. التخزين في Firestore باستخدام اسم الملف كـ Document ID واسم المجموعة من ENV
-        doc_ref = db.collection(FIRESTORE_COLLECTION).document(file_name)
+            image = Image.open(in_memory_file)
+            width, height = image.size
+            image_format = image.format
+
+        except Exception as e:
+            print(f"Failed to extract image dimensions for {file_name}: {e}")
+            
+    # 3. كتابة البيانات في Firestore
+    try:
+        # file_name هو الـ UUID بالـ extension
+        doc_id = os.path.splitext(file_name)[0] 
         
-        data_to_save = {
-            "file_name": file_name,
-            "bucket_name": bucket_name,
-            "received_at": datetime.datetime.now(datetime.timezone.utc),
-            "status": "logged_success"
+        doc_ref = db.collection(COLLECTION_NAME).document(doc_id)
+
+        metadata = {
+            'original_filename': file_name,
+            'gcs_path': f"gs://{RAW_BUCKET_NAME}/{file_name}",
+            'size_bytes': int(file_size_bytes) if file_size_bytes else None,
+            'content_type': content_type,
+            'image_properties': {
+                'width_px': width,
+                'height_px': height,
+                'format': image_format
+            },
+            'last_updated_metadata': firestore.SERVER_TIMESTAMP,
+            'status': 'Processing'
         }
 
-        doc_ref.set(data_to_save)
+        doc_ref.set(metadata, merge=True)
+
+        print(f"Metadata successfully written for: {file_name}")
         
-        print(f"تم تسجيل الملف في Firestore بنجاح. ID: {file_name}")
-        
-        return "", 204
+        return "", 204 # Ack (نجاح)
 
     except Exception as e:
-        print(f"فشل تخزين الملف {file_name} في Firestore: {e}")
-        return "Internal Server Error during Firestore save", 500
+        print(f"Failed to write to Firestore or process file {file_name}: {e}")
+        return "Internal Server Error", 500
 
 if __name__ == '__main__':
-    PORT = int(os.environ.get('PORT', 8080))
-    app.run(debug=True, host='0.0.0.0', port=PORT)
+    # Cloud Run يحدد الـ PORT
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

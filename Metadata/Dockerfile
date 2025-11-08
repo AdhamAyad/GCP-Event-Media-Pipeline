@@ -1,24 +1,17 @@
-FROM python:3.12-slim AS builder
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+ENV FLASK_ENV production
 
 WORKDIR /app
 
 COPY requirements.txt .
+RUN apt-get update && apt-get install -y libjpeg-dev zlib1g-dev \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove libjpeg-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# تثبيت التبعيات باستخدام pip
-RUN pip install --user -r requirements.txt 
+COPY . .
 
-FROM python:3.12-slim AS final
-
-WORKDIR /app
-
-# نسخ التبعيات المثبتة إلى البيئة النهائية
-COPY --from=builder /root/.local /root/.local
-
-ENV PATH=/root/.local/bin:$PATH
-
-COPY main.py .
-
-EXPOSE 8080
-
-# تشغيل التطبيق باستخدام Gunicorn
-CMD gunicorn --bind 0.0.0.0:$PORT main:app
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--threads", "8", "--timeout", "120", "main:app"]
