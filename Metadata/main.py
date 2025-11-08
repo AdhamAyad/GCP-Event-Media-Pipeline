@@ -8,34 +8,24 @@ from PIL import Image
 
 app = Flask(__name__)
 
-# العملاء الذين يتم قراءتهم مرة واحدة (كـ Global)
 RAW_BUCKET_NAME = os.environ.get("RAW_BUCKET_NAME")
-COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME") 
-# متغير غير ضروري لكن تم إضافته ليتوافق مع Terraform
-FIRESTORE_DB_NAME = os.environ.get("FIRESTORE_DB_NAME") 
-
+COLLECTION_NAME = os.environ.get("FIRESTORE_COLLECTION_NAME")
+FIRESTORE_DB_NAME = os.environ.get("FIRESTORE_DB_NAME")
 
 @app.route('/', methods=['POST'])
 def handle_pubsub_message():
-    # التهيئة الكاملة (Storage Client و Firestore Client) تتم داخل الدالة
-    # لمنع الانهيار عند بدء تشغيل الكونتينر (Lazy Initialization)
     try:
         storage_client = storage.Client()
         raw_bucket = storage_client.get_bucket(RAW_BUCKET_NAME)
-        
-        # الاتصال بـ Firestore، نمرر اسم الـ DB إذا كان موجودًا
-        db = firestore.Client(database=FIRESTORE_DB_NAME) 
-        
+        db = firestore.Client(database=FIRESTORE_DB_NAME)
     except Exception as e:
         print(f"FATAL ERROR: Failed to initialize resources (Bucket or Firestore): {e}")
-        # نرجع 500 لإعادة المحاولة
         return "Server configuration error", 500
 
     if not COLLECTION_NAME:
         print("Fatal Error: Collection name not defined.")
         return "Server configuration error", 500
 
-    # 1. تحليل الرسالة (Parsing)
     envelope = request.get_json(silent=True)
     if not envelope or "message" not in envelope:
         return "Bad Request", 400
@@ -49,13 +39,11 @@ def handle_pubsub_message():
         content_type = gcs_event.get('contentType', 'application/octet-stream')
 
         if not file_name or gcs_event.get('bucket') != RAW_BUCKET_NAME:
-            return "", 204 # Ack if not the target bucket
-
+            return "", 204
     except Exception as e:
         print(f"Error parsing message: {e}")
         return "Message parsing error", 400
 
-    # 2. استخراج الأبعاد
     width, height, image_format = (None, None, None)
     
     if content_type.startswith('image/'):
@@ -68,15 +56,11 @@ def handle_pubsub_message():
             image = Image.open(in_memory_file)
             width, height = image.size
             image_format = image.format
-
         except Exception as e:
             print(f"Failed to extract image dimensions for {file_name}: {e}")
-            
-    # 3. كتابة البيانات في Firestore
+
     try:
-        # file_name هو الـ UUID بالـ extension
-        doc_id = os.path.splitext(file_name)[0] 
-        
+        doc_id = os.path.splitext(file_name)[0]
         doc_ref = db.collection(COLLECTION_NAME).document(doc_id)
 
         metadata = {
@@ -94,15 +78,12 @@ def handle_pubsub_message():
         }
 
         doc_ref.set(metadata, merge=True)
-
         print(f"Metadata successfully written for: {file_name}")
-        
-        return "", 204 # Ack (نجاح)
+        return "", 204
 
     except Exception as e:
         print(f"Failed to write to Firestore or process file {file_name}: {e}")
         return "Internal Server Error", 500
 
 if __name__ == '__main__':
-    # Cloud Run يحدد الـ PORT
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
