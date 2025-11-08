@@ -157,14 +157,10 @@ module "ai_labeling_sa" {
     rules = [
       "roles/run.invoker",
       "roles/artifactregistry.reader",
+      "roles/aiplatform.user"
     ]
 }
 
-resource "google_project_iam_member" "ai_vision_user" {
-  project = var.project_id
-  role    = "roles/cloudvision.user"
-  member  = "serviceAccount:${module.ai_labeling_sa.service_account_email}"
-}
 
 resource "google_storage_bucket_iam_member" "ai_labeling_raw_bucket_reader" {
   bucket = google_storage_bucket.gcp_event_media.name
