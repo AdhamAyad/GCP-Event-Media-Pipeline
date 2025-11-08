@@ -152,7 +152,7 @@ def gallery():
                     expiration=datetime.timedelta(minutes=10),
                     method="GET",
                 )
-                data['signed_thumb_url'] = signed_url
+                data['signed_thumb_url'] = f"https://storage.googleapis.com/{PROCESSED_BUCKET_NAME}/{doc.id}_thumb.jpg"
 
             except Exception as e:
                 print(f"Error generating signed URL for {doc.id}: {e}")
