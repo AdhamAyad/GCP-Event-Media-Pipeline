@@ -18,10 +18,14 @@ module "backend_sa" {
         "roles/run.invoker",
         "roles/artifactregistry.reader",
         "roles/datastore.user",
-        "roles/iam.serviceAccountTokenCreator"
     ]
 }
 
+resource "google_project_iam_member" "backend_token" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountTokenCreator"
+  member  = "serviceAccount:${module.backend_sa.service_account_email}"
+}
 
 resource "google_storage_bucket_iam_member" "backend_processed_bucket_reader" {
   bucket = google_storage_bucket.gcp_event_media_processed_bucket.name

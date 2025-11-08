@@ -118,7 +118,7 @@ GALLERY_TEMPLATE = """
 </html>
 """
 
-# --- (الإضافات الجديدة - Endpoint المعرض) ---
+
 @app.route('/gallery', methods=['GET'])
 def gallery():
     if not COLLECTION_NAME or not FIRESTORE_DB_NAME or not PROCESSED_BUCKET_NAME:
