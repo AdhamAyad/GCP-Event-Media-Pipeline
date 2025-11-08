@@ -17,20 +17,26 @@ module "backend_sa" {
     rules = [
         "roles/run.invoker",
         "roles/artifactregistry.reader",
-        "roles/storage.objectCreator",
+        "roles/datastore.user" 
     ]
 }
 
-resource "google_storage_bucket_iam_member" "backend_bucket_reader" {
+resource "google_storage_bucket_iam_member" "backend_raw_bucket_reader" {
   bucket = google_storage_bucket.gcp_event_media.name
-  role   = "roles/storage.legacyBucketReader"
+  role   = "roles/storage.legacyBucketReader" 
   member = "serviceAccount:${module.backend_sa.service_account_email}"
 }
 
-resource "google_storage_bucket_iam_member" "backend_bucket_creator" {
+resource "google_storage_bucket_iam_member" "backend_raw_bucket_creator" {
   bucket = google_storage_bucket.gcp_event_media.name
-  role   = "roles/storage.objectCreator"
+  role   = "roles/storage.objectCreator" 
   member = "serviceAccount:${module.backend_sa.service_account_email}"
+}
+
+resource "google_storage_bucket_iam_member" "processed_bucket_public_viewer" {
+  bucket = google_storage_bucket.gcp_event_media_processed_bucket.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers" 
 }
 
 module "subscription_sa" {
