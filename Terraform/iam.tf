@@ -155,11 +155,15 @@ module "ai_labeling_sa" {
     display_name = "AI Labeling Service Account"
     project_id = var.project_id
     rules = [
-      "roles/datastore.user",
       "roles/run.invoker",
       "roles/artifactregistry.reader",
-      "roles/cloudvision.user"
     ]
+}
+
+resource "google_project_iam_member" "ai_vision_user" {
+  project = var.project_id
+  role    = "roles/cloudvision.user"
+  member  = "serviceAccount:${module.ai_labeling_sa.service_account_email}"
 }
 
 resource "google_storage_bucket_iam_member" "ai_labeling_raw_bucket_reader" {
