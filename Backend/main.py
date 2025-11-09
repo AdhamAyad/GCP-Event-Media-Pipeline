@@ -144,7 +144,7 @@ def gallery():
             
             # (إنشاء Signed URL للباكيت الـ Private)
             try:
-                thumb_blob_name = f"{doc.id}_thumb.jpg"
+                thumb_blob_name = f"{doc.id}_display.jpg"
                 
                 data['signed_thumb_url'] = f"https://storage.googleapis.com/{PROCESSED_BUCKET_NAME}/{doc.id}_display.jpg"
 
