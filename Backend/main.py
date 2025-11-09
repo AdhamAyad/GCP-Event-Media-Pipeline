@@ -146,7 +146,7 @@ def gallery():
             try:
                 thumb_blob_name = f"{doc.id}_thumb.jpg"
                 
-                data['signed_thumb_url'] = f"https://storage.googleapis.com/{PROCESSED_BUCKET_NAME}/{doc.id}_thumb.jpg"
+                data['signed_thumb_url'] = f"https://storage.googleapis.com/{PROCESSED_BUCKET_NAME}/{doc.id}_display.jpg"
 
             except Exception as e:
                 print(f"Error generating signed URL for {doc.id}: {e}")
